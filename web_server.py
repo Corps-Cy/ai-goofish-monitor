@@ -343,6 +343,7 @@ async def run_single_task(task_id: int, task_name: str):
         # 使用与Web服务器相同的Python解释器来运行爬虫脚本
         # 将 stdout 和 stderr 重定向到日志文件
         # 在非 Windows 系统上，使用 setsid 创建新进程组，以便能终止整个进程树
+        
         preexec_fn = os.setsid if sys.platform != "win32" else None
         # 为子进程强制设置 UTF-8 输出，确保日志统一为 UTF-8 编码
         child_env = os.environ.copy()
