@@ -416,25 +416,50 @@ async def send_ntfy_notification(product_data, reason):
                 
                 # 准备内容：根据配置决定是否使用Markdown格式
                 if WEBHOOK_ENABLE_MARKDOWN:
-                    # Markdown 格式
+                    # Markdown 格式 - 优化排版，增加换行确保不拥挤
+                    # 使用双换行确保在各种 Markdown 解析器下都能正确分段
                     final_content = (
-                        f"**价格**: {price}\n"
-                        f"**发布时间**: {publish_time}\n"
-                        f"**卖家**: {seller_name}\n"
-                        f"**原因**: {reason}\n"
+                        f"### {final_title}\n\n"
+                        f"💰 **价格**: `{price}`\n\n"
+                        f"📅 **发布时间**: {publish_time}\n\n"
+                        f"👤 **卖家**: {seller_name}\n\n"
+                        f"📝 **推荐原因**: \n> {reason}\n\n"
                     )
                     
                     # 构造 Markdown 链接部分
                     mobile_link_md = convert_goofish_link(link)
                     if mobile_link_md != link:
-                        final_content += f"**手机端链接**: [点击跳转]({mobile_link_md})\n**电脑端链接**: [点击跳转]({link})"
+                        final_content += f"📱 **手机端链接**: [点击跳转]({mobile_link_md})\n\n**电脑端链接**: [点击跳转]({link})\n\n"
                     else:
-                        final_content += f"**链接**: [点击跳转]({link})"
+                        final_content += f"🔗 **商品链接**: [点击跳转]({link})\n\n"
+
+                    # --- 图片支持 ---
+                    image_list = product_data.get('商品图片列表', [])
+                    main_image = product_data.get('商品主图链接')
+                    
+                    # 收集所有有效的图片链接
+                    all_images = []
+                    if main_image:
+                        all_images.append(main_image)
+                    if image_list:
+                        for img in image_list:
+                            if img not in all_images:
+                                all_images.append(img)
+                    
+                    if all_images:
+                        final_content += f"🖼️ **商品图片**:\n"
+                        # 最多展示 3 张图，避免消息超长，其余用链接表示
+                        for i, img in enumerate(all_images[:3]):
+                            final_content += f"![商品图片{i+1}]({img}) "
+                        
+                        if len(all_images) > 3:
+                            final_content += f"\n\n*共 {len(all_images)} 张图片，[查看全部链接]( {link} )*"
+                        final_content += "\n\n"
                 else:
                     # 普通文本格式 (保持原样)
                     final_content = message
 
-                # 对内容进行JSON转义
+                # 对内容进行JSON转义，确保在嵌入JSON模板时不会破坏结构
                 safe_title_json = json.dumps(final_title, ensure_ascii=False)[1:-1]
                 safe_content_json = json.dumps(final_content, ensure_ascii=False)[1:-1]
                 
@@ -467,6 +492,10 @@ async def send_ntfy_notification(product_data, reason):
                         final_url = urlunparse(url_parts)
                     except json.JSONDecodeError:
                         safe_print(f"   -> [警告] Webhook 查询参数格式错误，请检查 .env 中的 WEBHOOK_QUERY_PARAMETERS。")
+
+                # 输出调试日志
+                safe_print(f"   -> [Webhook GET] URL: {final_url}")
+                safe_print(f"   -> [Webhook GET] Headers: {json.dumps(headers, ensure_ascii=False)}")
 
                 response = await loop.run_in_executor(
                     None,
@@ -509,6 +538,14 @@ async def send_ntfy_notification(product_data, reason):
                             safe_print(f"   -> [警告] 不支持的 WEBHOOK_CONTENT_TYPE: {WEBHOOK_CONTENT_TYPE}。")
                     except json.JSONDecodeError:
                         safe_print(f"   -> [警告] Webhook 请求体格式错误，请检查 .env 中的 WEBHOOK_BODY。")
+
+                # 输出调试日志
+                safe_print(f"   -> [Webhook POST] URL: {final_url}")
+                safe_print(f"   -> [Webhook POST] Headers: {json.dumps(headers, ensure_ascii=False)}")
+                if json_payload:
+                    safe_print(f"   -> [Webhook POST] Payload (JSON): {json.dumps(json_payload, indent=2, ensure_ascii=False)}")
+                if data:
+                    safe_print(f"   -> [Webhook POST] Payload (Data): {data}")
 
                 response = await loop.run_in_executor(
                     None,
