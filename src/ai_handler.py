@@ -493,10 +493,6 @@ async def send_ntfy_notification(product_data, reason):
                     except json.JSONDecodeError:
                         safe_print(f"   -> [警告] Webhook 查询参数格式错误，请检查 .env 中的 WEBHOOK_QUERY_PARAMETERS。")
 
-                # 输出调试日志
-                safe_print(f"   -> [Webhook GET] URL: {final_url}")
-                safe_print(f"   -> [Webhook GET] Headers: {json.dumps(headers, ensure_ascii=False)}")
-
                 response = await loop.run_in_executor(
                     None,
                     lambda: requests.get(final_url, headers=headers, timeout=15)
@@ -538,14 +534,6 @@ async def send_ntfy_notification(product_data, reason):
                             safe_print(f"   -> [警告] 不支持的 WEBHOOK_CONTENT_TYPE: {WEBHOOK_CONTENT_TYPE}。")
                     except json.JSONDecodeError:
                         safe_print(f"   -> [警告] Webhook 请求体格式错误，请检查 .env 中的 WEBHOOK_BODY。")
-
-                # 输出调试日志
-                safe_print(f"   -> [Webhook POST] URL: {final_url}")
-                safe_print(f"   -> [Webhook POST] Headers: {json.dumps(headers, ensure_ascii=False)}")
-                if json_payload:
-                    safe_print(f"   -> [Webhook POST] Payload (JSON): {json.dumps(json_payload, indent=2, ensure_ascii=False)}")
-                if data:
-                    safe_print(f"   -> [Webhook POST] Payload (Data): {data}")
 
                 response = await loop.run_in_executor(
                     None,
