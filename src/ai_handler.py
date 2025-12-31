@@ -38,6 +38,7 @@ from src.config import (
     WEBHOOK_BODY,
     ENABLE_RESPONSE_FORMAT,
     client,
+    WEBHOOK_ENABLE_MARKDOWN,
 )
 from src.utils import convert_goofish_link, retry_on_failure
 
@@ -186,11 +187,19 @@ async def send_ntfy_notification(product_data, reason):
     title = product_data.get('商品标题', 'N/A')
     price = product_data.get('当前售价', 'N/A')
     link = product_data.get('商品链接', '#')
-    if PCURL_TO_MOBILE:
-        mobile_link = convert_goofish_link(link)
-        message = f"价格: {price}\n原因: {reason}\n手机端链接: {mobile_link}\n电脑端链接: {link}"
+    
+    # 获取新增字段：发布时间和卖家名称
+    publish_time = product_data.get('发布时间') or product_data.get('商品信息', {}).get('发布时间', '未知')
+    seller_name = product_data.get('卖家昵称') or product_data.get('卖家信息', {}).get('卖家昵称', '未知')
+    
+    # 构造链接部分 (兼容多种链接)
+    mobile_link = convert_goofish_link(link)
+    if mobile_link != link:
+        link_str = f"手机端链接: {mobile_link}\n电脑端链接: {link}"
     else:
-        message = f"价格: {price}\n原因: {reason}\n链接: {link}"
+        link_str = f"链接: {link}"
+
+    message = f"价格: {price}\n发布时间: {publish_time}\n卖家: {seller_name}\n原因: {reason}\n{link_str}"
 
     notification_title = f"🚨 新推荐! {title[:30]}..."
 
@@ -401,11 +410,36 @@ async def send_ntfy_notification(product_data, reason):
             def replace_placeholders(template_str):
                 if not template_str:
                     return ""
-                # 对内容进行JSON转义，避免换行符和特殊字符破坏JSON格式
-                safe_title = json.dumps(notification_title, ensure_ascii=False)[1:-1]  # 去掉外层引号
-                safe_content = json.dumps(message, ensure_ascii=False)[1:-1]  # 去掉外层引号
+                
+                # 准备标题
+                final_title = notification_title
+                
+                # 准备内容：根据配置决定是否使用Markdown格式
+                if WEBHOOK_ENABLE_MARKDOWN:
+                    # Markdown 格式
+                    final_content = (
+                        f"**价格**: {price}\n"
+                        f"**发布时间**: {publish_time}\n"
+                        f"**卖家**: {seller_name}\n"
+                        f"**原因**: {reason}\n"
+                    )
+                    
+                    # 构造 Markdown 链接部分
+                    mobile_link_md = convert_goofish_link(link)
+                    if mobile_link_md != link:
+                        final_content += f"**手机端链接**: [点击跳转]({mobile_link_md})\n**电脑端链接**: [点击跳转]({link})"
+                    else:
+                        final_content += f"**链接**: [点击跳转]({link})"
+                else:
+                    # 普通文本格式 (保持原样)
+                    final_content = message
+
+                # 对内容进行JSON转义
+                safe_title_json = json.dumps(final_title, ensure_ascii=False)[1:-1]
+                safe_content_json = json.dumps(final_content, ensure_ascii=False)[1:-1]
+                
                 # 同时支持旧的${title}${content}和新的{{title}}{{content}}格式
-                return template_str.replace("${title}", safe_title).replace("${content}", safe_content).replace("{{title}}", safe_title).replace("{{content}}", safe_content)
+                return template_str.replace("${title}", safe_title_json).replace("${content}", safe_content_json).replace("{{title}}", safe_title_json).replace("{{content}}", safe_content_json)
 
             # 准备请求头
             headers = {}

@@ -46,6 +46,7 @@ AI_DEBUG_MODE = os.getenv("AI_DEBUG_MODE", "false").lower() == "true"
 SKIP_AI_ANALYSIS = os.getenv("SKIP_AI_ANALYSIS", "false").lower() == "true"
 ENABLE_THINKING = os.getenv("ENABLE_THINKING", "false").lower() == "true"
 ENABLE_RESPONSE_FORMAT = os.getenv("ENABLE_RESPONSE_FORMAT", "true").lower() == "true"
+WEBHOOK_ENABLE_MARKDOWN = os.getenv("WEBHOOK_ENABLE_MARKDOWN", "false").lower() == "true"
 
 # --- Headers ---
 IMAGE_DOWNLOAD_HEADERS = {
