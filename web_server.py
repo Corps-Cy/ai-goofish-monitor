@@ -187,7 +187,20 @@ def save_notification_settings(settings: dict):
 
 
 def load_ai_settings():
-    """Load AI model settings from .env file"""
+    """Load AI model settings from cache or .env file"""
+    from src.config import get_ai_config_cache, get_ai_config
+    
+    # 优先从缓存读取
+    cache = get_ai_config_cache()
+    if cache:
+        return {
+            "OPENAI_API_KEY": cache.get("OPENAI_API_KEY", ""),
+            "OPENAI_BASE_URL": cache.get("OPENAI_BASE_URL", ""),
+            "OPENAI_MODEL_NAME": cache.get("OPENAI_MODEL_NAME", ""),
+            "PROXY_URL": cache.get("PROXY_URL", "")
+        }
+    
+    # 缓存为空则从环境变量读取
     from dotenv import dotenv_values
     config = dotenv_values(".env")
 
@@ -200,7 +213,7 @@ def load_ai_settings():
 
 
 def save_ai_settings(settings: dict):
-    """Save AI model settings to .env file"""
+    """Save AI model settings to .env file and update cache"""
     env_file = ".env"
     env_lines = []
 
@@ -234,6 +247,14 @@ def save_ai_settings(settings: dict):
         for key, value in existing_settings.items():
             if key not in setting_keys:
                 f.write(f"{key}={value}\n")
+    
+    # 更新缓存并重新初始化client
+    from src.config import update_ai_config_cache, init_ai_client
+    # 更新所有AI相关的设置到缓存（使用更新后的完整配置）
+    ai_settings = {k: existing_settings.get(k, "") for k in setting_keys}
+    update_ai_config_cache(ai_settings)
+    # 重新初始化client以使用新配置
+    init_ai_client()
 
 
 app = FastAPI(title="闲鱼智能监控机器人", lifespan=lifespan)
@@ -1142,7 +1163,11 @@ async def test_ai_settings_backend(username: str = Depends(verify_credentials)):
     测试AI模型设置是否有效（从后端容器内发起）。
     """
     try:
-        from src.config import client, BASE_URL, MODEL_NAME
+        from src.config import client, get_ai_config
+
+        # 从缓存获取最新的配置
+        base_url = get_ai_config("OPENAI_BASE_URL")
+        model_name = get_ai_config("OPENAI_MODEL_NAME")
 
         # 使用与spider_v2.py相同的AI客户端配置
         if not client:
@@ -1153,11 +1178,11 @@ async def test_ai_settings_backend(username: str = Depends(verify_credentials)):
 
         from src.config import get_ai_request_params
         
-        print(f"LOG: 后端容器AI测试 BASE_URL: {BASE_URL}, MODEL_NAME: {MODEL_NAME}")
+        print(f"LOG: 后端容器AI测试 BASE_URL: {base_url}, MODEL_NAME: {model_name}")
         # 测试连接
         response = await client.chat.completions.create(
             **get_ai_request_params(
-                model=MODEL_NAME,
+                model=model_name,
                 messages=[
                     {"role": "user", "content": "Hello, this is a test message from backend container to verify connection."}
                 ],

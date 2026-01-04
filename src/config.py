@@ -20,11 +20,56 @@ TASK_IMAGE_DIR_PREFIX = "task_images_"
 API_URL_PATTERN = "h5api.m.goofish.com/h5/mtop.taobao.idlemtopsearch.pc.search"
 DETAIL_API_URL_PATTERN = "h5api.m.goofish.com/h5/mtop.taobao.idle.pc.detail"
 
+# --- AI配置缓存 ---
+_ai_config_cache = {}
+
+def get_ai_config(key: str, default: str = None) -> str:
+    """
+    从缓存或环境变量获取AI配置，优先使用缓存
+    """
+    # 优先从缓存读取
+    if key in _ai_config_cache:
+        return _ai_config_cache[key]
+    # 缓存不存在则从环境变量读取
+    value = os.getenv(key, default)
+    # 如果环境变量有值，同时更新缓存
+    if value:
+        _ai_config_cache[key] = value
+    return value
+
+def update_ai_config_cache(settings: dict):
+    """
+    更新AI配置缓存
+    """
+    global _ai_config_cache
+    _ai_config_cache.update(settings)
+    # 同时更新环境变量，确保兼容性（包括空值，以支持清空配置）
+    for key, value in settings.items():
+        if value:
+            os.environ[key] = value
+        else:
+            # 如果值为空，从环境变量中删除（如果存在）
+            os.environ.pop(key, None)
+
+def clear_ai_config_cache():
+    """
+    清空AI配置缓存（用于重新从环境变量加载）
+    """
+    global _ai_config_cache
+    _ai_config_cache.clear()
+
+def get_ai_config_cache():
+    """
+    获取当前AI配置缓存
+    """
+    return _ai_config_cache.copy()
+
 # --- Environment Variables ---
-API_KEY = os.getenv("OPENAI_API_KEY")
-BASE_URL = os.getenv("OPENAI_BASE_URL")
-MODEL_NAME = os.getenv("OPENAI_MODEL_NAME")
-PROXY_URL = os.getenv("PROXY_URL")
+# 使用缓存机制读取配置
+API_KEY = get_ai_config("OPENAI_API_KEY")
+BASE_URL = get_ai_config("OPENAI_BASE_URL")
+MODEL_NAME = get_ai_config("OPENAI_MODEL_NAME")
+PROXY_URL = get_ai_config("PROXY_URL")
 NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL")
 GOTIFY_URL = os.getenv("GOTIFY_URL")
 GOTIFY_TOKEN = os.getenv("GOTIFY_TOKEN")
@@ -58,23 +103,52 @@ IMAGE_DOWNLOAD_HEADERS = {
 }
 
 # --- Client Initialization ---
-# 检查配置是否齐全
+client = None
+
+def init_ai_client():
+    """
+    初始化或重新初始化AI客户端
+    """
+    global client
+    
+    # 从缓存或环境变量重新读取配置
+    api_key = get_ai_config("OPENAI_API_KEY")
+    base_url = get_ai_config("OPENAI_BASE_URL")
+    model_name = get_ai_config("OPENAI_MODEL_NAME")
+    proxy_url = get_ai_config("PROXY_URL")
+    
+    # 检查配置是否齐全
+    if not all([base_url, model_name]):
+        print("警告：未在配置中完整设置 OPENAI_BASE_URL 和 OPENAI_MODEL_NAME。AI相关功能可能无法使用。")
+        client = None
+        return False
+    
+    try:
+        if proxy_url:
+            print(f"正在为AI请求使用HTTP/S代理: {proxy_url}")
+            # httpx 会自动从环境变量中读取代理设置
+            os.environ['HTTP_PROXY'] = proxy_url
+            os.environ['HTTPS_PROXY'] = proxy_url
+        else:
+            # 清除代理设置
+            os.environ.pop('HTTP_PROXY', None)
+            os.environ.pop('HTTPS_PROXY', None)
+
+        # openai 客户端内部的 httpx 会自动从环境变量中获取代理配置
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        print(f"AI客户端已初始化/更新: BASE_URL={base_url}, MODEL_NAME={model_name}")
+        return True
+    except Exception as e:
+        print(f"初始化 OpenAI 客户端时出错: {e}")
+        client = None
+        return False
+
+# 初始加载时初始化client
 if not all([BASE_URL, MODEL_NAME]):
     print("警告：未在 .env 文件中完整设置 OPENAI_BASE_URL 和 OPENAI_MODEL_NAME。AI相关功能可能无法使用。")
     client = None
 else:
-    try:
-        if PROXY_URL:
-            print(f"正在为AI请求使用HTTP/S代理: {PROXY_URL}")
-            # httpx 会自动从环境变量中读取代理设置
-            os.environ['HTTP_PROXY'] = PROXY_URL
-            os.environ['HTTPS_PROXY'] = PROXY_URL
-
-        # openai 客户端内部的 httpx 会自动从环境变量中获取代理配置
-        client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL)
-    except Exception as e:
-        print(f"初始化 OpenAI 客户端时出错: {e}")
-        client = None
+    init_ai_client()
 
 # 检查AI客户端是否成功初始化
 if not client:

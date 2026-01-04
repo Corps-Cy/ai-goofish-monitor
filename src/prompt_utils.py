@@ -5,7 +5,7 @@ import sys
 
 import aiofiles
 
-from src.config import MODEL_NAME, client
+from src.config import get_ai_config, client
 
 # The meta-prompt to instruct the AI
 META_PROMPT_TEMPLATE = """
@@ -60,9 +60,12 @@ async def generate_criteria(user_description: str, reference_file_path: str) -> 
     try:
         from src.config import get_ai_request_params
         
+        # 从缓存获取最新的模型名称
+        current_model_name = get_ai_config("OPENAI_MODEL_NAME")
+        
         response = await client.chat.completions.create(
             **get_ai_request_params(
-                model=MODEL_NAME,
+                model=current_model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.5 # Lower temperature for more predictable structure
             )

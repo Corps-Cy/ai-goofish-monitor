@@ -21,7 +21,7 @@ from src.config import (
     IMAGE_DOWNLOAD_HEADERS,
     IMAGE_SAVE_DIR,
     TASK_IMAGE_DIR_PREFIX,
-    MODEL_NAME,
+    get_ai_config,
     NTFY_TOPIC_URL,
     GOTIFY_URL,
     GOTIFY_TOKEN,
@@ -635,9 +635,12 @@ async def get_ai_analysis(product_data, image_paths=None, prompt_text=""):
 
             from src.config import get_ai_request_params
             
+            # 从缓存获取最新的模型名称
+            current_model_name = get_ai_config("OPENAI_MODEL_NAME")
+            
             # 构建请求参数，根据ENABLE_RESPONSE_FORMAT决定是否使用response_format
             request_params = {
-                "model": MODEL_NAME,
+                "model": current_model_name,
                 "messages": messages,
                 "temperature": current_temperature,
                 "max_tokens": 4000
